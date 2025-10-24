@@ -1,1 +1,37 @@
+1.The governing Navier–Stokes and continuity equations are discretized on a structured uniform grid using the finite difference method (FDM).
+Let the grid spacings be Δx and Δy, and the time step be Δt.
+The variables are defined at grid nodes (i,j) and time level n.
 
+2. Time Derivative (Forward Difference)
+∂u/∂t ≈ (uᶰ⁺¹ᵢⱼ - uᶰᵢⱼ) / Δt
+∂v/∂t ≈ (vᶰ⁺¹ᵢⱼ - vᶰᵢⱼ) / Δt
+
+3. Convection Term (Upwind Scheme)
+
+∂u/∂x ≈ (uᵢⱼ - uᵢ₋₁ⱼ) / Δx
+∂u/∂y ≈ (uᵢⱼ - uᵢⱼ₋₁) / Δy
+∂v/∂x ≈ (vᵢⱼ - vᵢ₋₁ⱼ) / Δx
+∂v/∂y ≈ (vᵢⱼ - vᵢⱼ₋₁) / Δy
+
+4. Diffusion Term (Central Difference)
+
+∂²u/∂x² ≈ (uᵢ₊₁ⱼ - 2uᵢⱼ + uᵢ₋₁ⱼ) / Δx²
+∂²u/∂y² ≈ (uᵢⱼ₊₁ - 2uᵢⱼ + uᵢⱼ₋₁) / Δy²
+∂²v/∂x² ≈ (vᵢ₊₁ⱼ - 2vᵢⱼ + vᵢ₋₁ⱼ) / Δx²
+∂²v/∂y² ≈ (vᵢⱼ₊₁ - 2vᵢⱼ + vᵢⱼ₋₁) / Δy²
+
+5. Discretized x-Momentum Equation
+uᶰ⁺¹ᵢⱼ = uᶰᵢⱼ
+Δt [ uᶰᵢⱼ (uᶰᵢⱼ - uᶰᵢ₋₁ⱼ)/Δx + vᶰᵢⱼ (uᶰᵢⱼ - uᶰᵢⱼ₋₁)/Δy ]
+(Δt / (2ρΔx)) (pᶰᵢ₊₁ⱼ - pᶰᵢ₋₁ⱼ)
+ν Δt [ (uᶰᵢ₊₁ⱼ - 2uᶰᵢⱼ + uᶰᵢ₋₁ⱼ)/Δx² + (uᶰᵢⱼ₊₁ - 2uᶰᵢⱼ + uᶰᵢⱼ₋₁)/Δy² ]
+
+6. Discretized y-Momentum Equation
+vᶰ⁺¹ᵢⱼ = vᶰᵢⱼ
+Δt [ uᶰᵢⱼ (vᶰᵢⱼ - vᶰᵢ₋₁ⱼ)/Δx + vᶰᵢⱼ (vᶰᵢⱼ - vᶰᵢⱼ₋₁)/Δy ]
+(Δt / (2ρΔy)) (pᶰᵢⱼ₊₁ - pᶰᵢⱼ₋₁)
+ν Δt [ (vᶰᵢ₊₁ⱼ - 2vᶰᵢⱼ + vᶰᵢ₋₁ⱼ)/Δx² + (vᶰᵢⱼ₊₁ - 2vᶰᵢⱼ + vᶰᵢⱼ₋₁)/Δy² ]
+
+5. Pressure Poisson Equation
+∂²p/∂x² + ∂²p/∂y² = (ρ/Δt) [ (uᵢ₊₁ⱼ - uᵢ₋₁ⱼ)/(2Δx) + (vᵢⱼ₊₁ - vᵢⱼ₋₁)/(2Δy) ]
+Solved iteratively using Gauss–Seidel or SOR method to enforce incompressibility (∇·u = 0).
