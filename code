@@ -1,0 +1,132 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+# SETUP
+
+os.makedirs("results", exist_ok=True)
+# Domain parameters
+nx, ny = 225, 100
+Lx, Ly = 2.0, 1.0
+dx, dy = Lx / (nx - 1), Ly / (ny - 1)
+rho = 1.0
+U_in = 1.0
+dt = 0.001
+nt = 10000 # longer run to see oscillations
+# Box (obstacle)
+box_x1, box_x2 = 0.8, 1.0
+box_y1, box_y2 = 0.4, 0.6
+
+x = np.linspace(0, Lx, nx)
+y = np.linspace(0, Ly, ny)
+X, Y = np.meshgrid(x, y)
+box = (X >= box_x1) & (X <= box_x2) & (Y >= box_y1) & (Y <= box_y2)
+
+# PRESSURE POISSON SOLVER
+
+def pressure_poisson(p, u, v, rho, dx, dy, dt):
+    pn = np.empty_like(p)
+    for _ in range(50):
+        pn[:] = p
+        p[1:-1, 1:-1] = (
+            ((pn[1:-1, 2:] + pn[1:-1, :-2]) * dy**2 +
+             (pn[2:, 1:-1] + pn[:-2, 1:-1]) * dx**2 -
+             rho * dx**2 * dy**2 / dt *
+             ((u[1:-1, 2:] - u[1:-1, :-2]) / (2 * dx) +
+              (v[2:, 1:-1] - v[:-2, 1:-1]) / (2 * dy)))
+            / (2 * (dx**2 + dy**2))
+        )
+# Boundary conditions
+        p[:, -1] = p[:, -2]   # dp/dx = 0 at outflow
+        p[:, 0]  = p[:, 1]    # dp/dx = 0 at inflow
+        p[-1, :] = 0          # p = 0 at top
+        p[0, :]  = p[1, :]    # dp/dy = 0 at bottom
+    return p
+
+# CFD SOLVER FUNCTION (for one Re)
+def simulate_flow(Re):
+    nu = U_in * Lx / Re
+# Initialize fields
+    u = np.zeros((ny, nx))
+    v = np.zeros((ny, nx))
+    p = np.zeros((ny, nx))
+    Cd, Cl = [], []
+
+    print(f"\nRunning simulation for Re = {Re}, ν = {nu:.5f}")
+
+    for n in range(nt):
+        un, vn = u.copy(), v.copy()
+        p = pressure_poisson(p, u, v, rho, dx, dy, dt)
+
+# Momentum equations
+        u[1:-1, 1:-1] = (
+            un[1:-1, 1:-1]
+            - un[1:-1, 1:-1] * (dt / dx) * (un[1:-1, 1:-1] - un[1:-1, :-2])
+            - vn[1:-1, 1:-1] * (dt / dy) * (un[1:-1, 1:-1] - un[:-2, 1:-1])
+            - (dt / (2 * rho * dx)) * (p[1:-1, 2:] - p[1:-1, :-2])
+            + nu * (dt / dx**2) * (un[1:-1, 2:] - 2 * un[1:-1, 1:-1] + un[1:-1, :-2])
+            + nu * (dt / dy**2) * (un[2:, 1:-1] - 2 * un[1:-1, 1:-1] + un[:-2, 1:-1])
+        )
+
+        v[1:-1, 1:-1] = (
+            vn[1:-1, 1:-1]
+            - un[1:-1, 1:-1] * (dt / dx) * (vn[1:-1, 1:-1] - vn[1:-1, :-2])
+            - vn[1:-1, 1:-1] * (dt / dy) * (vn[1:-1, 1:-1] - vn[:-2, 1:-1])
+            - (dt / (2 * rho * dy)) * (p[2:, 1:-1] - p[:-2, 1:-1])
+            + nu * (dt / dx**2) * (vn[1:-1, 2:] - 2 * vn[1:-1, 1:-1] + vn[1:-1, :-2])
+            + nu * (dt / dy**2) * (vn[2:, 1:-1] - 2 * vn[1:-1, 1:-1] + vn[:-2, 1:-1])
+        )
+
+#  Inlet perturbation (to cause oscillations)
+        u[:, 0] = U_in * (1 + 0.05 * np.sin(2 * np.pi * n / 100) + 0.02 * np.random.randn(ny))
+        v[:, 0] = 0.01 * np.sin(2 * np.pi * Y[:, 0] / Ly + n / 30)
+
+# Other BCs
+        u[:, -1] = u[:, -2]
+        v[:, -1] = v[:, -2]
+        u[0, :], u[-1, :] = 0, 0
+        v[0, :], v[-1, :] = 0, 0
+        u[box], v[box] = 0, 0
+
+        # Compute drag & lift
+        p_front  = np.mean(p[(X >= box_x1 - dx) & (X < box_x1) & (Y >= box_y1) & (Y <= box_y2)])
+        p_back   = np.mean(p[(X > box_x2) & (X <= box_x2 + dx) & (Y >= box_y1) & (Y <= box_y2)])
+        p_top    = np.mean(p[(Y > box_y2) & (Y <= box_y2 + dy) & (X >= box_x1) & (X <= box_x2)])
+        p_bottom = np.mean(p[(Y >= box_y1 - dy) & (Y < box_y1) & (X >= box_x1) & (X <= box_x2)])
+
+        Cd.append(2 * (p_front - p_back) / (rho * U_in**2))
+        Cl.append(2 * (p_top - p_bottom) / (rho * U_in**2))
+
+# Show snapshots
+        if n in [1000, 3000, 5000, 7000, 9000]:
+            plt.figure(figsize=(8, 3))
+            plt.streamplot(X, Y, u, v, density=2, color=np.sqrt(u**2 + v**2),
+                           cmap='plasma', linewidth=0.7)
+            plt.fill_betweenx(y, box_x1, box_x2,
+                              where=(y >= box_y1) & (y <= box_y2), color='black')
+            plt.title(f'Pathlines Around Box (Re={Re}, Step={n})')
+            plt.xlabel('x'); plt.ylabel('y')
+            plt.xlim(0, Lx); plt.ylim(0, Ly)
+            plt.colorbar(label='Velocity Magnitude')
+            plt.tight_layout(); plt.show()
+
+# Cd & Cl vs Time
+    t = np.arange(len(Cd)) * dt
+    plt.figure(figsize=(8, 3))
+    plt.plot(t, Cd, 'r-', lw=1.2)
+    plt.xlabel('Time (s)'); plt.ylabel('Cd')
+    plt.title(f'Drag Coefficient vs Time (Re={Re})')
+    plt.grid(True); plt.tight_layout(); plt.show()
+
+    plt.figure(figsize=(8, 3))
+    plt.plot(t, Cl, 'b-', lw=1.2)
+    plt.xlabel('Time (s)'); plt.ylabel('Cl')
+    plt.title(f'Lift Coefficient vs Time (Re={Re})')
+    plt.grid(True); plt.tight_layout(); plt.show()
+
+    print(f"Re={Re} simulation complete.\n")
+    return Cd, Cl, t
+# RUN FOR  REYNOLDS NUMBER
+Re_values = [100,200,400]
+for Re in Re_values:
+    simulate_flow(Re)
