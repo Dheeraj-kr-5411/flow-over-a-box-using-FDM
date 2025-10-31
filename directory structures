@@ -1,0 +1,9 @@
+CFD_Box_Flow_Project/
+│
+├─ code/                  
+│   └─ simulate_flow.py
+├─ results/               
+│   ├─ streamlines/
+│   ├─ vorticity/
+│   └─ drag_lift/
+└─ README.md
